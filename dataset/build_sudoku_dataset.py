@@ -61,14 +61,15 @@ def convert_subset(set_name: str, config: DataProcessConfig):
     # Read CSV
     inputs = []
     labels = []
-    
-    with open(hf_hub_download(config.source_repo, f"{set_name}.csv", repo_type="dataset"), newline="") as csvfile:
+
+    with open(f"./data/sudoku-extreme-1k-aug-1000/{set_name}.csv") as csvfile:
+    # with open(hf_hub_download(config.source_repo, f"{set_name}.csv", repo_type="dataset"), newline="") as csvfile:
         reader = csv.reader(csvfile)
         next(reader)  # Skip header
         for source, q, a, rating in reader:
             if (config.min_difficulty is None) or (int(rating) >= config.min_difficulty):
                 assert len(q) == 81 and len(a) == 81
-                
+
                 inputs.append(np.frombuffer(q.replace('.', '0').encode(), dtype=np.uint8).reshape(9, 9) - ord('0'))
                 labels.append(np.frombuffer(a.encode(), dtype=np.uint8).reshape(9, 9) - ord('0'))
 
