@@ -1,3 +1,4 @@
+from flash_attn import flash_attn_func
 from torch import nn
 import torch
 
@@ -55,15 +56,38 @@ class MultiHeadAttention(nn.Module):
 
         return self.W_out(torch.concat(V, dim=-1))
 
+class MultiHeadFlashAttention(nn.Module):
+    def __init__(self, dim_in, num_heads, dim_head, causal=False, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.W_q = nn.Linear(dim_in, dim_head * num_heads, bias=False)
+        self.W_k = nn.Linear(dim_in, dim_head * num_heads, bias=False)
+        self.W_v = nn.Linear(dim_in, dim_head * num_heads, bias=False)
+
+        self.W_out = nn.Linear(dim_head * num_heads, dim_in, bias=False)
+
+        self.attention = Attention()
+
+        self.num_heads = num_heads
+        self.dim_head = dim_head
+        self.dim_in = dim_in
+        self.causal = causal
+
+    def forward(self, x):
+        with torch.autocast('cuda'):
+            b, n = x.shape[:2]
+            q, k, v = self.W_q(x), self.W_k(x), self.W_v(x)
+            q = q.view(b, n, self.num_heads, self.dim_head)
+            k = k.view(b, n, self.num_heads, self.dim_head)
+            v = v.view(b, n, self.num_heads, self.dim_head)
+
+            return self.W_out(flash_attn_func(q, k, v, causal=self.causal).view(b, n, -1))
 
 class TransformerEncoderLayer(nn.Module):
     def __init__(self, dim_in, dim_qk, dim_v, num_heads, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.mha = MultiHeadAttention(
+        self.mha = MultiHeadFlashAttention(
             dim_in=dim_in,
-            dim_qk=dim_qk,
-            dim_v=dim_v,
-            dim_out=dim_in,
+            dim_head=dim_in,
             num_heads=num_heads,
         )
 
@@ -77,8 +101,8 @@ class TransformerEncoderLayer(nn.Module):
         self.ff_norm = nn.LayerNorm(dim_in)
 
     def forward(self, x):
-        mha_out = self.mha_norm(self.mha(x)) + x
-        return self.ff_norm(self.ffn(mha_out)) + mha_out
+        mha_out = self.mha(self.mha_norm(x)) + x
+        return self.ffn(self.ff_norm(mha_out)) + mha_out
 
 class TransformerEncoder(nn.Module):
     def __init__(self, dim_in, dim_qk, dim_v, num_heads, num_layers, *args, **kwargs):

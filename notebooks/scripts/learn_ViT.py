@@ -93,14 +93,14 @@ class ViTClassifier(nn.Module):
 
         # Add a classification head
         self.classifier = nn.Sequential(
-            nn.Linear(dim_in, dim_in // 4),
+            nn.Linear(dim_in, dim_in),
             nn.GELU(),
-            nn.Linear(dim_in // 4, num_classes),
+            nn.Linear(dim_in, num_classes),
         )
 
         # Initialize positional encoding
         self.pos_encoding = nn.Parameter(torch.randn(max_seq_len, dim_in) * 0.02)
-        self.cls_token = nn.Parameter(torch.randn(1, dim_in))
+        self.cls_token = nn.Parameter(torch.randn(1, dim_in) * 0.02)
 
     def forward(self, x):
         # x shape: (batch_size, H, W, C)
@@ -116,6 +116,7 @@ class ViTClassifier(nn.Module):
 
         # Add CLS token (using mean of patches as CLS token)
         cls_token = self.cls_token.expand((batch_size, -1, -1))
+        # cls_token = x_patches.mean(dim=1, keepdim=True)
         x_with_cls = torch.concat([cls_token, x_patches], dim=1)  # (batch_size, seq_len+1, patch_dim)
 
         # Add positional encoding
@@ -187,14 +188,14 @@ def main():
     parser = argparse.ArgumentParser(description='ViT Training with Distributed Support')
     parser.add_argument('--data-dir', default='./data/cifar10/cifar-10-batches-py', help='CIFAR-10 data directory')
     parser.add_argument('--checkpoint-dir', default='./checkpoints', help='Checkpoint directory')
-    parser.add_argument('--batch-size', type=int, default=1024 // 8, help='Batch size per GPU')
-    parser.add_argument('--epochs', type=int, default=100, help='Number of training epochs')
-    parser.add_argument('--lr', type=float, default=1e-4, help='Learning rate')
-    parser.add_argument('--weight-decay', type=float, default=1e-2, help='Weight decay')
-    parser.add_argument('--patch-size', type=int, default=4, help='Patch size')
+    parser.add_argument('--batch-size', type=int, default=128 // 8, help='Batch size per GPU')
+    parser.add_argument('--epochs', type=int, default=200, help='Number of training epochs')
+    parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate')
+    parser.add_argument('--weight-decay', type=float, default=5e-5, help='Weight decay')
+    parser.add_argument('--patch-size', type=int, default=8, help='Patch size')
     parser.add_argument('--num-heads', type=int, default=12, help='Number of attention heads')
-    parser.add_argument('--num-layers', type=int, default=12, help='Number of transformer layers')
-    parser.add_argument('--hidden-dim', type=int, default=768, help='Hidden dimension')
+    parser.add_argument('--num-layers', type=int, default=7, help='Number of transformer layers')
+    parser.add_argument('--hidden-dim', type=int, default=384, help='Hidden dimension')
 
     args = parser.parse_args()
 
@@ -270,7 +271,7 @@ def main():
     # Training setup
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=1)
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
 
     best_acc = 0.0
 
