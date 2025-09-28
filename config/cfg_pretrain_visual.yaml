@@ -1,0 +1,31 @@
+# ARC training config
+
+defaults:
+  - arch: vhrm_v0
+  - _self_
+
+hydra:
+  output_subdir: null
+
+# Data path
+data_path: data/cifar10-processed
+
+# Hyperparams - Training
+global_batch_size: 512
+
+epochs: 200
+eval_interval: 1
+checkpoint_every_eval: True
+
+lr: 1e-3
+lr_min_ratio: 1.0
+lr_warmup_steps: 100
+
+# Standard hyperparameter settings for LM, as used in Llama
+beta1: 0.9
+beta2: 0.95
+weight_decay: 0.1
+
+# Puzzle embedding hyperparameters
+puzzle_emb_lr: 1e-3
+puzzle_emb_weight_decay: 0.1

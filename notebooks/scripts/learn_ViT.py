@@ -7,6 +7,8 @@ import math
 import argparse
 from typing import Optional
 
+import numpy as np
+
 # Add current directory to Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
@@ -79,9 +81,21 @@ def prepare_cifar10_for_vit(data, labels, normalize=True):
 
     return images, labels_tensor
 
+def pos_emb(edge_index: EdgeTensor, num_pos_emb: int = 16):
+    # From https://github.com/jingraham/neurips19-graph-protein-design
+    d = edge_index[0] - edge_index[1]
+
+    frequency = torch.exp(
+        torch.arange(
+            0, num_pos_emb, 2, dtype=torch.float32, device=edge_index.device
+        )
+        * -(np.log(10000.0) / num_pos_emb)
+    )
+    angles = d.unsqueeze(-1) * frequency
+    return torch.cat((torch.cos(angles), torch.sin(angles)), -1)
 
 class ViTClassifier(nn.Module):
-    def __init__(self, encoder, num_classes=10, max_seq_len=100, patch_size=4):
+    def __init__(self, encoder, num_classes=10, max_seq_len=100, mlp_dim=512, patch_size=4):
         super().__init__()
         self.encoder = encoder
         self.max_seq_len = max_seq_len
@@ -93,9 +107,9 @@ class ViTClassifier(nn.Module):
 
         # Add a classification head
         self.classifier = nn.Sequential(
-            nn.Linear(dim_in, dim_in),
+            nn.Linear(dim_in, mlp_dim),
             nn.GELU(),
-            nn.Linear(dim_in, num_classes),
+            nn.Linear(mlp_dim, num_classes),
         )
 
         # Initialize positional encoding
