@@ -150,6 +150,7 @@ def create_model(config: PretrainConfig, train_metadata: PuzzleDatasetMetadata, 
         vocab_size=train_metadata.vocab_size,
         seq_len=train_metadata.seq_len,
         num_puzzle_identifiers=train_metadata.num_puzzle_identifiers,
+        num_classes=train_metadata.num_puzzle_identifiers,  # For classification tasks
         causal=False  # Non-autoregressive
     )
 
@@ -451,10 +452,7 @@ def launch(hydra_config: DictConfig):
     train_state = init_train_state(config, train_metadata, world_size=WORLD_SIZE)
 
     # Progress bar and logger
-    progress_bar = None
     if RANK == 0:
-        progress_bar = tqdm.tqdm(total=train_state.total_steps)
-
         wandb.init(project=config.project_name, name=config.run_name, config=config.model_dump(), settings=wandb.Settings(_disable_stats=True))  # type: ignore
         wandb.log({"num_params": sum(x.numel() for x in train_state.model.parameters())}, step=0)
         save_code_and_config(config)
@@ -466,12 +464,25 @@ def launch(hydra_config: DictConfig):
 
             ############ Train Iter
             train_state.model.train()
+
+            # Create progress bar for this epoch
+            progress_bar = None
+            if RANK == 0:
+                # Estimate steps per epoch
+                steps_per_epoch = int(train_metadata.total_groups * train_metadata.mean_puzzle_examples / config.global_batch_size)
+                progress_bar = tqdm.tqdm(total=steps_per_epoch, desc=f"Epoch {_iter_id * train_epochs_per_iter}")
+
             for set_name, batch, global_batch_size in train_loader:
                 metrics = train_batch(config, train_state, batch, global_batch_size, rank=RANK, world_size=WORLD_SIZE)
 
                 if RANK == 0 and metrics is not None:
                     wandb.log(metrics, step=train_state.step)
-                    progress_bar.update(train_state.step - progress_bar.n)  # type: ignore
+                    if progress_bar is not None:
+                        progress_bar.update(1)
+
+            # Close progress bar for this epoch
+            if RANK == 0 and progress_bar is not None:
+                progress_bar.close()
 
             ############ Evaluation
             train_state.model.eval()

@@ -13,7 +13,7 @@ data_path: data/cifar10-processed
 # Hyperparams - Training
 global_batch_size: 512
 
-epochs: 200
+epochs: 50
 eval_interval: 1
 checkpoint_every_eval: True
 
@@ -27,5 +27,5 @@ beta2: 0.95
 weight_decay: 0.1
 
 # Puzzle embedding hyperparameters
-puzzle_emb_lr: 1e-3
+puzzle_emb_lr: 1e-2
 puzzle_emb_weight_decay: 0.1
